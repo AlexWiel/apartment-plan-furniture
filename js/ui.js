@@ -4,6 +4,7 @@ import { CATALOG, findTemplate, previewSVG } from './furniture.js';
 import { bounds, polygonArea, polygonPerimeter, normalizeAngle, round1 } from './geometry.js';
 import { formatArea, formatLength } from './render.js';
 import * as tools from './tools.js';
+import * as photo from './photo.js';
 
 const $ = (sel) => document.querySelector(sel);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -141,6 +142,9 @@ const FIELDS = {
   'plan.name': { get: (p) => p.name, set: (p, _, v) => (p.name = v.trim() || 'Meine Wohnung') },
   'plan.wallThickness': { get: (p) => p.settings.wallThickness, set: (p, _, v) => (p.settings.wallThickness = Math.min(60, Math.max(1, v))) },
   'plan.showDimensions': { get: (p) => p.settings.showDimensions, set: (p, _, v) => (p.settings.showDimensions = v), noUndo: true },
+  'bg.visible': { get: (p) => p.background?.visible, set: (p, _, v) => p.background && (p.background.visible = v), noUndo: true },
+  'bg.opacity': { get: (p) => p.background?.opacity, set: (p, _, v) => p.background && (p.background.opacity = Math.min(1, Math.max(0.05, v))), noUndo: true },
+  'bg.locked': { get: (p) => p.background?.locked, set: (p, _, v) => p.background && (p.background.locked = v), noUndo: true },
   'room.name': { get: (_, r) => r.name, set: (_, r, v) => (r.name = v.trim() || r.name) },
   'room.color': { get: (_, r) => r.color, set: (_, r, v) => (r.color = v) },
   'room.width': {
@@ -180,6 +184,21 @@ const selectField = (field, label, options) =>
   `<label class="field"><span>${label}</span><select data-field="${field}">${options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>`;
 const btn = (action, label, cls = '') => `<button type="button" data-action="${action}" class="${cls}">${label}</button>`;
 
+function backgroundSection(plan) {
+  if (!plan.background) {
+    return `<h3>Vorlage</h3><p class="hint">Ein Foto oder Scan eines Grundrisses lässt sich als Vorlage unterlegen und nachzeichnen.</p>
+      <div class="actions">${btn('bg-load', 'Foto als Vorlage laden…')}</div>`;
+  }
+  return `<h3>Vorlage (Foto)</h3>
+    <label class="check"><input type="checkbox" data-field="bg.visible"> Anzeigen</label>
+    <label class="field"><span>Deckkraft</span><input class="range" type="range" min="0.05" max="1" step="0.05" data-field="bg.opacity"></label>
+    <label class="check"><input type="checkbox" data-field="bg.locked"> Gesperrt (entsperrt: Foto verschieben)</label>
+    <div class="actions">
+      ${btn('bg-calibrate', 'Maßstab festlegen', 'primary')}${btn('bg-perspective', 'Perspektive korrigieren')}
+      ${btn('bg-rotate', '↻ 90° drehen')}${btn('bg-load', 'Ersetzen…')}${btn('bg-remove', 'Entfernen', 'danger')}
+    </div>`;
+}
+
 function buildPanel(plan, item) {
   const sel = ui.selection;
   if (!item) {
@@ -189,6 +208,7 @@ function buildPanel(plan, item) {
       ${input('plan.wallThickness', 'Wandstärke (cm)', 'number', 'min="1" max="60"')}
       <label class="check"><input type="checkbox" data-field="plan.showDimensions"> Wandmaße aller Räume anzeigen</label>
       <dl class="stats"><dt>Räume</dt><dd>${plan.rooms.length}</dd><dt>Wohnfläche</dt><dd>${formatArea(total)}</dd><dt>Möbel</dt><dd>${plan.furniture.length}</dd></dl>
+      ${backgroundSection(plan)}
       <div class="help">
         <p><b>So geht's:</b></p>
         <ol>
@@ -245,7 +265,7 @@ export function renderPanel() {
   const plan = getPlan();
   const item = selectedItem();
   const sel = item ? ui.selection : null;
-  const key = sel ? `${sel.kind}:${sel.id}:${sel.vertex}:${item.type || ''}` : `plan:${plan.rooms.length}:${plan.furniture.length}:${plan.rooms.map((r) => r.points.length).join()}`;
+  const key = sel ? `${sel.kind}:${sel.id}:${sel.vertex}:${item.type || ''}` : `plan:${plan.rooms.length}:${plan.furniture.length}:${plan.rooms.map((r) => r.points.length).join()}:${!!plan.background}`;
   const panel = $('#panel-body');
   if (key !== panelKey) {
     panelKey = key;
@@ -276,7 +296,7 @@ function initPanel() {
     if (!def) return;
     let v;
     if (e.target.type === 'checkbox') v = e.target.checked;
-    else if (e.target.type === 'number') {
+    else if (e.target.type === 'number' || e.target.type === 'range') {
       v = parseFloat(e.target.value);
       if (!Number.isFinite(v)) return renderPanel();
     } else v = e.target.value;
@@ -285,6 +305,12 @@ function initPanel() {
       apply(getPlan());
       changed();
     } else mutate(apply);
+  });
+  // Deckkraft live beim Ziehen des Reglers
+  panel.addEventListener('input', (e) => {
+    if (e.target.dataset.field !== 'bg.opacity') return;
+    FIELDS['bg.opacity'].set(getPlan(), null, parseFloat(e.target.value));
+    changed();
   });
   panel.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && e.target.matches('input')) e.target.blur();
@@ -314,6 +340,21 @@ function initPanel() {
           if (action === 'front') plan.furniture.push(f);
           else plan.furniture.unshift(f);
         });
+        break;
+      case 'bg-load':
+        photo.choosePhoto();
+        break;
+      case 'bg-calibrate':
+        photo.startCalibration();
+        break;
+      case 'bg-perspective':
+        photo.openPerspective();
+        break;
+      case 'bg-rotate':
+        photo.rotatePhoto();
+        break;
+      case 'bg-remove':
+        photo.removePhoto();
         break;
       case 'save-custom': {
         const f = selectedItem();

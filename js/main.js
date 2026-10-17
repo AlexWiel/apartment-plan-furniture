@@ -4,16 +4,19 @@ import {
   createEmptyPlan, selectedItem, select,
 } from './state.js';
 import { createView } from './view.js';
-import { renderPlan } from './render.js';
+import { renderPlan, renderBackground, backgroundBounds } from './render.js';
 import { planBounds } from './geometry.js';
 import * as tools from './tools.js';
 import { initUI, renderPalette, renderPanel, toast } from './ui.js';
 import * as storage from './storage.js';
 import { examplePlan } from './example.js';
+import { initPhoto, choosePhoto } from './photo.js';
 
 const $ = (sel) => document.querySelector(sel);
 const svg = $('#canvas');
 const world = $('#world');
+const bgLayer = $('#bg-layer');
+const planLayer = $('#plan-layer');
 
 let raf = 0;
 const requestRender = () => {
@@ -23,7 +26,8 @@ const view = createView(svg, world, requestRender);
 
 function draw() {
   raf = 0;
-  world.innerHTML = renderPlan(getPlan(), { scale: view.scale, viewBounds: view.viewBounds() });
+  renderBackground(bgLayer, planLayer, getPlan());
+  planLayer.innerHTML = renderPlan(getPlan(), { scale: view.scale, viewBounds: view.viewBounds() });
   $('#zoom-level').textContent = `${Math.round(view.scale * 100)} %`;
 }
 
@@ -33,6 +37,7 @@ const HINTS = {
   room: 'Klicke Eckpunkte – Klick auf den ersten Punkt, Doppelklick oder Enter schließt den Raum · Shift: 45° · Esc: abbrechen',
   door: 'Klicke auf eine Wand, um eine Tür zu setzen · Esc: fertig',
   window: 'Klicke auf eine Wand, um ein Fenster zu setzen · Esc: fertig',
+  calibrate: 'Maßstab: Klicke Anfang und Ende einer Strecke mit bekannter Länge auf dem Foto an · Esc: abbrechen',
 };
 
 function syncToolbar() {
@@ -49,10 +54,11 @@ function syncToolbar() {
   $('#plan-title').textContent = `— ${plan.name}${dirty ? ' •' : ''}`;
   document.title = `${dirty ? '• ' : ''}${plan.name} – Wohnplaner`;
   let hint = HINTS[ui.tool];
+  if (ui.tool === 'select' && plan.background?.visible && !plan.background.locked) hint = 'Vorlage entsperrt: Ziehen verschiebt das Foto · zum Zeichnen im Panel wieder sperren';
   if (ui.tool === 'select' && ui.selection?.kind === 'furniture') hint = 'Ziehen zum Verschieben · Kreis-Griff: drehen · Ecken: Größe · Alt: ohne Magnet';
   if (ui.tool === 'select' && ui.selection?.kind === 'room') hint = 'Ecken ziehen · Kreise auf Kanten ziehen fügt Ecken ein · Entf löscht Ecke/Raum';
   $('#hint').textContent = hint;
-  $('#empty-state').hidden = !(plan.rooms.length === 0 && plan.furniture.length === 0 && ui.tool === 'select');
+  $('#empty-state').hidden = !(plan.rooms.length === 0 && plan.furniture.length === 0 && !plan.background && ui.tool === 'select');
 }
 
 // ---------- Autosave ----------
@@ -77,7 +83,16 @@ function confirmDiscard() {
 }
 
 function fitView() {
-  const b = planBounds(getPlan());
+  const plan = getPlan();
+  const boxes = [planBounds(plan), plan.background?.visible ? backgroundBounds(plan) : null].filter(Boolean);
+  const b = boxes.length
+    ? {
+      minX: Math.min(...boxes.map((x) => x.minX)),
+      minY: Math.min(...boxes.map((x) => x.minY)),
+      maxX: Math.max(...boxes.map((x) => x.maxX)),
+      maxY: Math.max(...boxes.map((x) => x.maxY)),
+    }
+    : null;
   view.fit(b || { minX: 0, minY: 0, maxX: 800, maxY: 600 });
 }
 
@@ -169,11 +184,12 @@ function loadExample() {
 
 async function importFile(file) {
   try {
-    const plan = await storage.importJSON(file);
+    const { plan, imageWarning } = await storage.importJSON(file);
     if (!confirmDiscard()) return;
     loadPlan(plan, null, { saved: false });
     $('#dlg-open').close();
-    toast(`„${plan.name}“ importiert.`);
+    if (imageWarning) toast('Plan importiert – das Foto passt aber nicht in den Browser-Speicher und geht beim Neuladen verloren.', 'error');
+    else toast(`„${plan.name}“ importiert.`);
   } catch (err) {
     toast(err.message, 'error');
   }
@@ -210,6 +226,8 @@ on('#file-import', 'change', (e) => {
   if (file) importFile(file);
 });
 on('#btn-png', 'click', exportPNG);
+on('#btn-photo', 'click', choosePhoto);
+on('#btn-start-photo', 'click', choosePhoto);
 on('#btn-undo', 'click', undo);
 on('#btn-redo', 'click', redo);
 on('#btn-grid', 'click', () => toggleSetting('showGrid'));
@@ -310,6 +328,7 @@ window.addEventListener('blur', () => tools.setSpace(false));
 // ---------- Start ----------
 tools.initTools(svg, view);
 initUI(view, svg);
+initPhoto(fitView);
 const restored = storage.loadAutosave();
 if (restored) {
   ui.currentId = restored.currentId;
@@ -317,4 +336,5 @@ if (restored) {
 } else {
   changed();
 }
+storage.cleanupImages(getPlan());
 fitView();

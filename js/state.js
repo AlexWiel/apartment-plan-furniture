@@ -1,4 +1,5 @@
 // Zentrales Datenmodell, UI-Zustand und Undo/Redo.
+import { hasImage } from './background.js';
 
 export const PLAN_VERSION = 1;
 export const GRID_SIZES = [10, 20, 25, 50, 100];
@@ -14,6 +15,7 @@ export function createEmptyPlan(name = 'Meine Wohnung') {
     openings: [],
     furniture: [],
     customFurniture: [],
+    background: null, // Foto-Vorlage: { imageId, x, y, cmPerPx, opacity, visible, locked }
   };
 }
 
@@ -26,6 +28,19 @@ const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof 
 const arr = (v) => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object') : []);
 const safeId = (v, prefix) => (typeof v === 'string' && /^[\w-]+$/.test(v) ? v : uid(prefix));
 const color = (v, d) => (typeof v === 'string' && /^#[0-9a-f]{3,8}$/i.test(v) ? v : d);
+
+function normalizeBackground(b) {
+  if (!b || typeof b !== 'object' || !hasImage(b.imageId)) return null;
+  return {
+    imageId: b.imageId,
+    x: num(b.x, 0),
+    y: num(b.y, 0),
+    cmPerPx: Math.min(1000, Math.max(0.001, num(b.cmPerPx, 1))),
+    opacity: Math.min(1, Math.max(0.05, num(b.opacity, 0.6))),
+    visible: b.visible !== false,
+    locked: b.locked !== false,
+  };
+}
 
 // Prüft und vervollständigt einen geladenen Plan (z. B. aus einer JSON-Datei).
 export function normalizePlan(data) {
@@ -73,6 +88,7 @@ export function normalizePlan(data) {
       h: Math.max(1, num(c.h, 50)),
       color: color(c.color, '#bcaaa4'),
     })),
+    background: normalizeBackground(data.background),
   };
   const roomIds = new Set(plan.rooms.map((r) => r.id));
   plan.openings = arr(data.openings)
@@ -95,10 +111,11 @@ export function normalizePlan(data) {
 
 // ---- UI-Zustand (wird nicht gespeichert) ----
 export const ui = {
-  tool: 'select', // select | room | door | window
+  tool: 'select', // select | room | door | window | calibrate
   selection: null, // { kind: 'room'|'furniture'|'opening', id, vertex }
   drawing: null, // { points: [], cursor }
   openingPreview: null,
+  calibration: null, // { points: [], cursor }
   currentId: null, // ID in der Plan-Bibliothek
   savedSnapshot: null,
 };
