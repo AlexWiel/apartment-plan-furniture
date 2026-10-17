@@ -15,6 +15,12 @@ const pointers = new Map();
 let pinch = null;
 let drag = null;
 let spaceDown = false;
+let onCalibrated = () => {};
+
+// Wird aufgerufen, sobald beim Maßstab-Festlegen zwei Punkte gesetzt sind.
+export function setCalibrationHandler(fn) {
+  onCalibrated = fn;
+}
 
 const snapOn = (e) => getPlan().settings.snap && !(e && e.altKey);
 
@@ -28,6 +34,7 @@ export function initTools(svgEl, v) {
   svg.addEventListener('pointerleave', () => {
     if (drag) return;
     if (ui.drawing) ui.drawing.cursor = null;
+    if (ui.calibration) ui.calibration.cursor = null;
     ui.openingPreview = null;
     changed();
   });
@@ -47,6 +54,7 @@ export function setTool(tool) {
   if (ui.tool === tool) return;
   ui.tool = tool;
   ui.drawing = tool === 'room' ? { points: [], cursor: null } : null;
+  ui.calibration = tool === 'calibrate' ? { points: [], cursor: null } : null;
   ui.openingPreview = null;
   if (tool !== 'select') select(null);
   svg.dataset.tool = tool;
@@ -191,6 +199,7 @@ function onDown(e) {
     return;
   }
   if (ui.tool === 'room') return roomDown(e, world);
+  if (ui.tool === 'calibrate') return calibrateDown(world);
   if (ui.tool === 'door' || ui.tool === 'window') return openingDown(e, world);
   selectDown(e, world, e.target.closest('[data-kind]'));
 }
@@ -231,6 +240,9 @@ function selectDown(e, world, target) {
   } else if (kind === 'opening') {
     select('opening', id);
     drag = { ...base, type: 'opening', o: findOpening(id) };
+  } else if (kind === 'background' && plan.background) {
+    select(null);
+    drag = { ...base, type: 'background', origin: [plan.background.x, plan.background.y] };
   } else if (kind === 'room') {
     const room = findRoom(id);
     select('room', id);
@@ -255,6 +267,16 @@ function roomDown(e, world) {
   pts.push(p);
   ui.drawing.cursor = p;
   changed();
+}
+
+function calibrateDown(world) {
+  if (!ui.calibration) ui.calibration = { points: [], cursor: null };
+  const pts = ui.calibration.points;
+  if (pts.length >= 2) pts.length = 0;
+  pts.push(roundPoint(world));
+  changed();
+  if (pts.length === 2 && dist(pts[0], pts[1]) > 0.5) onCalibrated(pts[0], pts[1]);
+  else if (pts.length === 2) pts.pop();
 }
 
 function openingDown(e, world) {
@@ -307,6 +329,9 @@ function onMove(e) {
     } else if (ui.tool === 'door' || ui.tool === 'window') {
       updateOpeningPreview(world);
       changed();
+    } else if (ui.tool === 'calibrate' && ui.calibration) {
+      ui.calibration.cursor = roundPoint(world);
+      changed();
     }
     return;
   }
@@ -328,6 +353,10 @@ function onMove(e) {
   switch (drag.type) {
     case 'vertex':
       drag.room.points[drag.index] = snapRoomPoint(world, e, null, { room: drag.room, index: drag.index });
+      break;
+    case 'background':
+      plan.background.x = round1(drag.origin[0] + dx);
+      plan.background.y = round1(drag.origin[1] + dy);
       break;
     case 'room': {
       let ddx = dx, ddy = dy;

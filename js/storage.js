@@ -1,5 +1,6 @@
 // Speichern & Laden: Autosave, Plan-Bibliothek im Browser, JSON- und PNG-Export.
 import { normalizePlan, uid } from './state.js';
+import { getImage, putImage, pruneImages } from './background.js';
 import { planBounds, polygonArea } from './geometry.js';
 import { renderPlan, COLORS, FONT, formatArea } from './render.js';
 
@@ -84,7 +85,30 @@ function download(blob, name) {
 }
 
 export function exportJSON(plan) {
-  download(new Blob([JSON.stringify(plan, null, 2)], { type: 'application/json' }), fileName(plan.name, 'json'));
+  const data = { ...plan };
+  const img = plan.background && getImage(plan.background.imageId);
+  if (img) data.images = { [plan.background.imageId]: img };
+  download(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), fileName(plan.name, 'json'));
+}
+
+// Bilder aus einer importierten Datei in den Bildspeicher übernehmen.
+function importImages(data) {
+  let persisted = true;
+  if (data && data.images && typeof data.images === 'object') {
+    for (const [id, img] of Object.entries(data.images)) {
+      if (/^[\w-]+$/.test(id) && img && typeof img.dataUrl === 'string' && img.dataUrl.startsWith('data:image/') && img.width > 0 && img.height > 0) {
+        persisted = putImage(img, id).persisted && persisted;
+      }
+    }
+  }
+  return persisted;
+}
+
+// Löscht gespeicherte Fotos, die weder im zwischengespeicherten Plan noch in der Bibliothek vorkommen.
+export function cleanupImages(currentPlan) {
+  const ids = [currentPlan?.background?.imageId, readJSON(AUTOSAVE_KEY, {})?.plan?.background?.imageId];
+  for (const e of Object.values(readLibrary())) ids.push(e?.plan?.background?.imageId);
+  pruneImages(ids.filter(Boolean));
 }
 
 export async function importJSON(file) {
@@ -95,7 +119,9 @@ export async function importJSON(file) {
   } catch {
     throw new Error('Die Datei ist keine gültige JSON-Datei.');
   }
-  return normalizePlan(data);
+  const persisted = importImages(data);
+  const plan = normalizePlan(data);
+  return { plan, imageWarning: !persisted && !!plan.background };
 }
 
 // Erzeugt ein eigenständiges SVG des Plans (ohne Auswahl und Bedienelemente).

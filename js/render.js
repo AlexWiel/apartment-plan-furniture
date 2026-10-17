@@ -2,6 +2,7 @@
 import { ui } from './state.js';
 import { polygonArea, labelPoint, bounds, dist, furnitureHalfExtents, rotate, pointInPolygon } from './geometry.js';
 import { furnitureSymbol } from './furniture.js';
+import { getImage } from './background.js';
 
 export const COLORS = {
   paper: '#fbfaf7',
@@ -130,6 +131,8 @@ function furnitureLabel(f) {
  */
 export function renderPlan(plan, opts) {
   const { scale, interactive = true, viewBounds } = opts;
+  // Bei sichtbarer Foto-Vorlage scheinen die Räume durch
+  const translucent = interactive && plan.background?.visible;
   const set = plan.settings;
   const wt = set.wallThickness;
   const g = set.gridSize;
@@ -152,7 +155,7 @@ export function renderPlan(plan, opts) {
 
   for (const room of plan.rooms) {
     const pts = ptsAttr(room.points);
-    fills += `<polygon points="${pts}" fill="${room.color}" ${interactive ? `data-kind="room" data-id="${room.id}"` : ''}/>`;
+    fills += `<polygon points="${pts}" fill="${room.color}" ${translucent ? 'fill-opacity="0.35"' : ''} ${interactive ? `data-kind="room" data-id="${room.id}"` : ''}/>`;
     if (set.showGrid) {
       const [ox, oy] = roomGridOrigin(room);
       defs += gridPattern(`grid-${room.id}`, ox, oy, g, px, scale);
@@ -261,9 +264,65 @@ function renderToolPreview(plan, wt, px) {
       }
     }
   }
+  if (ui.tool === 'calibrate' && ui.calibration) {
+    const { points, cursor } = ui.calibration;
+    const all = cursor && points.length < 2 ? [...points, cursor] : points;
+    if (all.length === 2) {
+      s += `<line x1="${n(all[0][0])}" y1="${n(all[0][1])}" x2="${n(all[1][0])}" y2="${n(all[1][1])}" stroke="#e53935" stroke-width="${n(2 * px)}" pointer-events="none"/>`;
+    }
+    for (const p of all) {
+      s += `<circle cx="${n(p[0])}" cy="${n(p[1])}" r="${n(5 * px)}" fill="none" stroke="#e53935" stroke-width="${n(2 * px)}" pointer-events="none"/>`
+        + `<path d="M${n(p[0] - 9 * px)} ${n(p[1])}H${n(p[0] + 9 * px)}M${n(p[0])} ${n(p[1] - 9 * px)}V${n(p[1] + 9 * px)}" stroke="#e53935" stroke-width="${n(px)}" pointer-events="none"/>`;
+    }
+  }
   if ((ui.tool === 'door' || ui.tool === 'window') && ui.openingPreview) {
     const room = plan.rooms.find((r) => r.id === ui.openingPreview.roomId);
     if (room) s += renderOpening(room, ui.openingPreview, wt, px, 'opacity="0.55" pointer-events="none"');
   }
   return s;
+}
+
+// Foto-Vorlage in einer eigenen, dauerhaften Ebene: das (große) Bild wird nur bei Änderungen neu gesetzt.
+let bgKey = '';
+export function renderBackground(layer, planLayer, plan) {
+  const b = plan.background;
+  const img = b && getImage(b.imageId);
+  const active = !!(img && b.visible);
+  // Entsperrte Vorlage: Ziehen verschiebt das Foto, der Plan ist so lange nicht anklickbar.
+  planLayer.style.pointerEvents = active && !b.locked ? 'none' : '';
+  const key = active ? `${b.imageId}|${b.x}|${b.y}|${b.cmPerPx}|${b.opacity}|${b.locked}` : '';
+  if (key === bgKey) return;
+  bgKey = key;
+  if (!active) {
+    layer.replaceChildren();
+    return;
+  }
+  let el = layer.firstElementChild;
+  if (!el) {
+    el = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    el.setAttribute('preserveAspectRatio', 'none');
+    layer.append(el);
+  }
+  if (el.getAttribute('href') !== img.dataUrl) el.setAttribute('href', img.dataUrl);
+  el.setAttribute('x', b.x);
+  el.setAttribute('y', b.y);
+  el.setAttribute('width', img.width * b.cmPerPx);
+  el.setAttribute('height', img.height * b.cmPerPx);
+  el.setAttribute('opacity', b.opacity);
+  if (b.locked) {
+    el.setAttribute('pointer-events', 'none');
+    el.removeAttribute('data-kind');
+    el.style.cursor = '';
+  } else {
+    el.setAttribute('pointer-events', 'all');
+    el.dataset.kind = 'background';
+    el.style.cursor = 'move';
+  }
+}
+
+export function backgroundBounds(plan) {
+  const b = plan.background;
+  const img = b && getImage(b.imageId);
+  if (!img) return null;
+  return { minX: b.x, minY: b.y, maxX: b.x + img.width * b.cmPerPx, maxY: b.y + img.height * b.cmPerPx };
 }

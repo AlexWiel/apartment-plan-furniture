@@ -23,7 +23,9 @@
       <button id="btn-export" title="Plan als JSON-Datei herunterladen">Export</button>
       <button id="btn-import" title="Plan aus JSON-Datei laden">Import</button>
       <button id="btn-png" title="Plan als Bild (PNG) herunterladen">PNG</button>
+      <button id="btn-photo" title="Foto oder Scan eines Grundrisses als Vorlage zum Nachzeichnen laden">Foto</button>
       <input id="file-import" type="file" accept=".json,application/json" hidden>
+      <input id="file-photo" type="file" accept="image/*" hidden>
     </div>
 
     <div class="group" role="group" aria-label="Bearbeiten">
@@ -75,7 +77,7 @@
 
     <section class="stage">
       <svg id="canvas" data-tool="select" xmlns="http://www.w3.org/2000/svg" aria-label="Grundriss">
-        <g id="world"></g>
+        <g id="world"><g id="bg-layer"></g><g id="plan-layer"></g></g>
       </svg>
       <div id="empty-state" class="empty-state" hidden>
         <h2>Willkommen beim Wohnplaner</h2>
@@ -83,6 +85,7 @@
         <div class="actions">
           <button id="btn-start-room" class="primary">Raum zeichnen</button>
           <button id="btn-example">Beispielwohnung laden</button>
+          <button id="btn-start-photo">Foto als Vorlage</button>
         </div>
       </div>
       <div id="hint" class="hint-bar"></div>
@@ -133,6 +136,30 @@
     </form>
   </dialog>
 
+  <dialog id="dlg-calibrate">
+    <form method="dialog">
+      <h2>Maßstab festlegen</h2>
+      <p class="hint">Wie lang ist die markierte Strecke in Wirklichkeit?</p>
+      <label class="field"><span>Länge (cm)</span><input id="calibrate-length" type="number" min="1" step="any" required></label>
+      <menu>
+        <button value="cancel" formnovalidate>Abbrechen</button>
+        <button value="ok" class="primary">Übernehmen</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="dlg-perspective" class="wide">
+    <form method="dialog">
+      <h2>Perspektive korrigieren</h2>
+      <p class="hint">Ziehe die vier Punkte auf die Ecken des Grundrisses (oder eines Rechtecks darin). Das Foto wird danach gerade gerückt.</p>
+      <div class="persp-wrap"><canvas id="persp-canvas"></canvas></div>
+      <menu>
+        <button value="cancel" formnovalidate>Abbrechen</button>
+        <button value="ok" class="primary" id="btn-persp-apply">Entzerren</button>
+      </menu>
+    </form>
+  </dialog>
+
   <dialog id="dlg-help">
     <form method="dialog">
       <h2>Hilfe &amp; Tastenkürzel</h2>
@@ -143,6 +170,7 @@
         <tr><td><kbd>Shift</kbd></td><td>Beim Zeichnen: Winkel auf 45°-Schritte</td></tr>
         <tr><td><kbd>Alt</kbd></td><td>Beim Ziehen: ohne Magnet</td></tr>
         <tr><td><kbd>G</kbd> / <kbd>M</kbd></td><td>Raster / Magnet umschalten</td></tr>
+        <tr><td>Foto</td><td>Grundriss-Foto als Vorlage laden, Maßstab über zwei Punkte festlegen, dann nachzeichnen</td></tr>
         <tr><td><kbd>R</kbd></td><td>Ausgewähltes Möbel um 90° drehen</td></tr>
         <tr><td><kbd>Strg</kbd>+<kbd>D</kbd></td><td>Duplizieren</td></tr>
         <tr><td><kbd>Entf</kbd></td><td>Auswahl bzw. Eckpunkt löschen</td></tr>
