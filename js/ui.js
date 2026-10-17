@@ -2,7 +2,7 @@
 import { getPlan, ui, mutate, changed, uid, selectedItem } from './state.js';
 import { CATALOG, findTemplate, previewSVG } from './furniture.js';
 import { bounds, polygonArea, polygonPerimeter, normalizeAngle, round1 } from './geometry.js';
-import { formatArea, formatLength } from './render.js';
+import { formatArea, formatLength, OPENING_TYPES, OPENING_NAMES, openingGeom } from './render.js';
 import * as tools from './tools.js';
 import * as photo from './photo.js';
 
@@ -170,7 +170,7 @@ const FIELDS = {
   'f.color': { get: (_, f) => f.color, set: (_, f, v) => (f.color = v) },
   'f.x': { get: (_, f) => num(f.x), set: (_, f, v) => (f.x = v) },
   'f.y': { get: (_, f) => num(f.y), set: (_, f, v) => (f.y = v) },
-  'o.type': { get: (_, o) => o.type, set: (_, o, v) => (o.type = v === 'window' ? 'window' : 'door') },
+  'o.type': { get: (_, o) => o.type, set: (_, o, v) => (o.type = OPENING_TYPES.includes(v) ? v : 'door') },
   'o.width': { get: (_, o) => num(o.width), set: (_, o, v) => (o.width = Math.max(10, v)) },
   'o.swing': { get: (_, o) => o.swing, set: (_, o, v) => (o.swing = v) },
   'o.flip': { get: (_, o) => (o.flip ? 'out' : 'in'), set: (_, o, v) => (o.flip = v === 'out') },
@@ -213,7 +213,7 @@ function buildPanel(plan, item) {
         <p><b>So geht's:</b></p>
         <ol>
           <li><b>Raum zeichnen</b> (W): Eckpunkte anklicken, mit Klick auf den ersten Punkt, Doppelklick oder Enter abschließen.</li>
-          <li><b>Tür/Fenster</b> (T/F): auf eine Wand klicken.</li>
+          <li><b>Tür, Schiebetür, Durchgang, Fenster</b> (T/S/D/F): auf eine Wand klicken. Ein Durchgang entfernt einfach einen Teil der Wand.</li>
           <li><b>Möbel</b> aus der Liste links auf den Plan ziehen oder anklicken.</li>
           <li>Verschieben per Ziehen – <b>Alt</b> gedrückt halten fängt nicht am Raster.</li>
         </ol>
@@ -249,12 +249,17 @@ function buildPanel(plan, item) {
       </div>`;
   }
   if (sel.kind === 'opening') {
-    let html = `<h2>${item.type === 'door' ? 'Tür' : 'Fenster'}</h2>
-      ${selectField('o.type', 'Art', [['door', 'Tür'], ['window', 'Fenster']])}
+    let html = `<h2>${OPENING_NAMES[item.type]}</h2>
+      ${selectField('o.type', 'Art', OPENING_TYPES.map((t) => [t, OPENING_NAMES[t]]))}
       ${input('o.width', 'Breite (cm)', 'number', 'min="10"')}`;
     if (item.type === 'door') {
       html += selectField('o.swing', 'Anschlag', [['left', 'Links'], ['right', 'Rechts']]);
       html += selectField('o.flip', 'Öffnet', [['in', 'Nach innen'], ['out', 'Nach außen']]);
+    } else if (item.type === 'sliding') {
+      html += selectField('o.swing', 'Schiebt nach', [['left', 'Links'], ['right', 'Rechts']]);
+      html += selectField('o.flip', 'Läuft auf der', [['in', 'Innenseite'], ['out', 'Außenseite']]);
+    } else if (item.type === 'passage') {
+      html += `<div class="actions">${btn('full-wall', 'Ganze Wand öffnen')}</div>`;
     }
     return html + `<p class="hint">Zum Verschieben entlang der Wand ziehen.</p><div class="actions">${btn('delete', 'Löschen', 'danger')}</div>`;
   }
@@ -339,6 +344,15 @@ function initPanel() {
           const [f] = plan.furniture.splice(i, 1);
           if (action === 'front') plan.furniture.push(f);
           else plan.furniture.unshift(f);
+        });
+        break;
+      case 'full-wall':
+        mutate((plan) => {
+          const o = plan.openings.find((x) => x.id === sel.id);
+          const room = o && plan.rooms.find((r) => r.id === o.roomId);
+          if (!room) return;
+          o.width = Math.round(openingGeom(room, { ...o, width: 1e9 }).L * 10) / 10;
+          o.t = 0.5;
         });
         break;
       case 'bg-load':

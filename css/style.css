@@ -192,7 +192,7 @@ body.dragging, body.dragging * { cursor: copy !important; }
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   cursor: default;
 }
-#canvas[data-tool="room"], #canvas[data-tool="door"], #canvas[data-tool="window"] { cursor: crosshair; }
+#canvas[data-tool="room"], #canvas[data-tool="door"], #canvas[data-tool="sliding"], #canvas[data-tool="passage"], #canvas[data-tool="window"] { cursor: crosshair; }
 #canvas.panning, #canvas.panning * { cursor: grab !important; }
 
 .empty-state {
