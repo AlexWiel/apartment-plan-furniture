@@ -36,6 +36,8 @@ const HINTS = {
   select: '',
   room: 'Klicke Eckpunkte – Klick auf den ersten Punkt, Doppelklick oder Enter schließt den Raum · Shift: 45° · Esc: abbrechen',
   door: 'Klicke auf eine Wand, um eine Tür zu setzen · Esc: fertig',
+  sliding: 'Klicke auf eine Wand, um eine Schiebetür zu setzen · Esc: fertig',
+  passage: 'Klicke auf eine Wand, um einen Durchgang (Wandöffnung ohne Tür) zu setzen · Breite im Panel · Esc: fertig',
   window: 'Klicke auf eine Wand, um ein Fenster zu setzen · Esc: fertig',
   calibrate: 'Maßstab: Klicke Anfang und Ende einer Strecke mit bekannter Länge auf dem Foto an · Esc: abbrechen',
 };
@@ -310,6 +312,8 @@ window.addEventListener('keydown', (e) => {
         case 'v': tools.setTool('select'); break;
         case 'w': tools.setTool('room'); break;
         case 't': tools.setTool('door'); break;
+        case 's': tools.setTool('sliding'); break;
+        case 'd': tools.setTool('passage'); break;
         case 'f': tools.setTool('window'); break;
         case 'g': toggleSetting('showGrid'); break;
         case 'm': toggleSetting('snap'); break;

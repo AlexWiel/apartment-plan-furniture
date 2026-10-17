@@ -6,7 +6,7 @@ import {
   dist, roundPoint, round1, polygonArea, projectToSegment, rotate, furnitureHalfExtents, nearestGridLine,
   normalizeAngle, pointInPolygon,
 } from './geometry.js';
-import { roomGridOrigin, openingGeom } from './render.js';
+import { roomGridOrigin, openingGeom, OPENING_TYPES, OPENING_WIDTHS } from './render.js';
 import { findTemplate } from './furniture.js';
 
 let svg;
@@ -200,7 +200,7 @@ function onDown(e) {
   }
   if (ui.tool === 'room') return roomDown(e, world);
   if (ui.tool === 'calibrate') return calibrateDown(world);
-  if (ui.tool === 'door' || ui.tool === 'window') return openingDown(e, world);
+  if (OPENING_TYPES.includes(ui.tool)) return openingDown(e, world);
   selectDown(e, world, e.target.closest('[data-kind]'));
 }
 
@@ -296,7 +296,7 @@ function updateOpeningPreview(world) {
     ui.openingPreview = null;
     return;
   }
-  const width = ui.tool === 'door' ? 90 : 120;
+  const width = OPENING_WIDTHS[ui.tool];
   ui.openingPreview = {
     type: ui.tool,
     roomId: best.room.id,
@@ -326,7 +326,7 @@ function onMove(e) {
     if (ui.tool === 'room' && ui.drawing) {
       ui.drawing.cursor = snapRoomPoint(world, e, ui.drawing.points[ui.drawing.points.length - 1]);
       changed();
-    } else if (ui.tool === 'door' || ui.tool === 'window') {
+    } else if (OPENING_TYPES.includes(ui.tool)) {
       updateOpeningPreview(world);
       changed();
     } else if (ui.tool === 'calibrate' && ui.calibration) {

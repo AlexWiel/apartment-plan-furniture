@@ -10,7 +10,8 @@ ausprobiert. Ohne Server, ohne Build-Schritt – reines HTML, CSS und JavaScript
 - **Räume als Polygone** zeichnen (auch L-förmig/schräg). Ecken fangen am Raster und an bestehenden Ecken,
   Shift = 45°-Winkel. Ecken nachträglich ziehen, einfügen (Kreise auf den Kanten) und löschen.
 - **Raster in jedem Raum** (10 / 20 / 25 / 50 / 100 cm), ein-/ausblendbar.
-- **Türen & Fenster** auf Wände setzen und entlang der Wand verschieben; Anschlag und Öffnungsrichtung wählbar.
+- **Türen, Schiebetüren, Durchgänge & Fenster** auf Wände setzen und entlang der Wand verschieben; Anschlag,
+  Öffnungs- bzw. Schieberichtung wählbar. Ein **Durchgang** entfernt einen Teil der Wand (auch die ganze Wand).
 - **Möbelkatalog** (Wohnen, Essen, Schlafen, Küche, Bad, Büro) mit realistischen Standardmaßen, plus
   **eigene Möbel** mit beliebigen Maßen.
 - Möbel verschieben, drehen (Griff oder Taste R), Größe ändern. **Leicht magnetisch**: rastet nur in der Nähe
@@ -76,5 +77,5 @@ python3 -m http.server 8000
 }
 ```
 
-Koordinaten in cm; Möbel-`x`/`y` ist der Mittelpunkt, `wall` der Index der Raumkante, `t` die Position darauf (0–1).
+Koordinaten in cm; Möbel-`x`/`y` ist der Mittelpunkt, `type` ist `door`, `sliding`, `passage` oder `window`, `wall` der Index der Raumkante, `t` die Position darauf (0–1).
 `background` und `images` sind optional (nur mit Foto-Vorlage); im Browser liegen die Fotos getrennt vom Plan.

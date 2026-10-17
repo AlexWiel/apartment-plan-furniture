@@ -14,6 +14,9 @@ export const COLORS = {
   dim: '#5f6f78',
   window: '#e3f2fd',
 };
+export const OPENING_TYPES = ['door', 'sliding', 'passage', 'window'];
+export const OPENING_NAMES = { door: 'Tür', sliding: 'Schiebetür', passage: 'Durchgang', window: 'Fenster' };
+export const OPENING_WIDTHS = { door: 90, sliding: 100, passage: 100, window: 120 };
 export const FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 
 const n = (v) => Math.round(v * 100) / 100;
@@ -59,11 +62,42 @@ function gridPattern(id, ox, oy, g, px, scale) {
 
 function renderOpening(room, o, wt, px, extra = '') {
   const g = openingGeom(room, o);
-  const { p1, p2, inward, half } = g;
+  const { p1, p2, inward, half, u, P } = g;
   let s = `<g ${extra}>`;
-  // Lücke in der Wand
-  s += `<line x1="${n(p1[0])}" y1="${n(p1[1])}" x2="${n(p2[0])}" y2="${n(p2[1])}" stroke="${COLORS.paper}" stroke-width="${n(wt + 2)}"/>`;
-  if (o.type === 'window') {
+  // Lücke in der Wand (beim Durchgang in der Farbe des Raumes, als ginge der Boden durch)
+  const gapColor = o.type === 'passage' ? room.color : COLORS.paper;
+  s += `<line x1="${n(p1[0])}" y1="${n(p1[1])}" x2="${n(p2[0])}" y2="${n(p2[1])}" stroke="${gapColor}" stroke-width="${n(wt + 2)}"/>`;
+  if (o.type === 'passage') {
+    // nur die Wandenden markieren
+    for (const p of [p1, p2]) {
+      const a = [p[0] + inward[0] * (wt / 2), p[1] + inward[1] * (wt / 2)];
+      const b = [p[0] - inward[0] * (wt / 2), p[1] - inward[1] * (wt / 2)];
+      s += `<line x1="${n(a[0])}" y1="${n(a[1])}" x2="${n(b[0])}" y2="${n(b[1])}" stroke="${COLORS.wall}" stroke-width="${n(px * 1.5)}"/>`;
+    }
+  } else if (o.type === 'sliding') {
+    // Schiebetür: schmales Türblatt in der Wandflucht, halb in die Wand geschoben, Pfeil = Schieberichtung
+    const w = half * 2;
+    const dir = o.swing === 'right' ? 1 : -1;
+    const side = o.flip ? -1 : 1;
+    const th = Math.max(3, wt * 0.4);
+    const off = (wt / 2 - th / 2) * side;
+    const c = [P[0] + u[0] * dir * w * 0.3 + inward[0] * off, P[1] + u[1] * dir * w * 0.3 + inward[1] * off];
+    const hl = w / 2;
+    const ht = th / 2;
+    const q = [[-hl, -ht], [hl, -ht], [hl, ht], [-hl, ht]].map(([a, b]) => [
+      c[0] + u[0] * a + inward[0] * b,
+      c[1] + u[1] * a + inward[1] * b,
+    ]);
+    s += `<polygon points="${ptsAttr(q)}" fill="#90a4ae" stroke="${COLORS.wall}" stroke-width="${n(Math.max(px * 1.5, 1.5))}"/>`;
+    // Pfeil im Raum vor der Tür
+    const ao = (wt / 2 + 10) * side;
+    const a0 = [P[0] - u[0] * dir * w * 0.25 + inward[0] * ao, P[1] - u[1] * dir * w * 0.25 + inward[1] * ao];
+    const a1 = [P[0] + u[0] * dir * w * 0.25 + inward[0] * ao, P[1] + u[1] * dir * w * 0.25 + inward[1] * ao];
+    const hs = Math.min(8, w * 0.1);
+    const h1 = [a1[0] - u[0] * dir * hs + inward[0] * hs * 0.6, a1[1] - u[1] * dir * hs + inward[1] * hs * 0.6];
+    const h2 = [a1[0] - u[0] * dir * hs - inward[0] * hs * 0.6, a1[1] - u[1] * dir * hs - inward[1] * hs * 0.6];
+    s += `<path d="M${n(a0[0])} ${n(a0[1])}L${n(a1[0])} ${n(a1[1])}M${n(h1[0])} ${n(h1[1])}L${n(a1[0])} ${n(a1[1])}L${n(h2[0])} ${n(h2[1])}" fill="none" stroke="${COLORS.dim}" stroke-width="${n(px * 1.2)}"/>`;
+  } else if (o.type === 'window') {
     const h = wt / 2;
     const q = [
       [p1[0] + inward[0] * h, p1[1] + inward[1] * h],
@@ -275,7 +309,7 @@ function renderToolPreview(plan, wt, px) {
         + `<path d="M${n(p[0] - 9 * px)} ${n(p[1])}H${n(p[0] + 9 * px)}M${n(p[0])} ${n(p[1] - 9 * px)}V${n(p[1] + 9 * px)}" stroke="#e53935" stroke-width="${n(px)}" pointer-events="none"/>`;
     }
   }
-  if ((ui.tool === 'door' || ui.tool === 'window') && ui.openingPreview) {
+  if (OPENING_TYPES.includes(ui.tool) && ui.openingPreview) {
     const room = plan.rooms.find((r) => r.id === ui.openingPreview.roomId);
     if (room) s += renderOpening(room, ui.openingPreview, wt, px, 'opacity="0.55" pointer-events="none"');
   }

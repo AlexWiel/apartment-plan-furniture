@@ -97,7 +97,7 @@ export function normalizePlan(data) {
       const room = plan.rooms.find((r) => r.id === o.roomId);
       return {
         id: safeId(o.id, 'o'),
-        type: o.type === 'window' ? 'window' : 'door',
+        type: ['door', 'sliding', 'passage', 'window'].includes(o.type) ? o.type : 'door',
         roomId: o.roomId,
         wall: Math.min(room.points.length - 1, Math.max(0, Math.floor(num(o.wall, 0)))),
         t: Math.min(1, Math.max(0, num(o.t, 0.5))),
@@ -111,7 +111,7 @@ export function normalizePlan(data) {
 
 // ---- UI-Zustand (wird nicht gespeichert) ----
 export const ui = {
-  tool: 'select', // select | room | door | window | calibrate
+  tool: 'select', // select | room | door | sliding | passage | window | calibrate
   selection: null, // { kind: 'room'|'furniture'|'opening', id, vertex }
   drawing: null, // { points: [], cursor }
   openingPreview: null,
